@@ -1,11 +1,9 @@
-// jenkins/Jenkinsfile
 pipeline {
   agent any
 
   environment {
     AWS_REGION      = 'us-east-1'
-    ECR_REPO        = credentials('ecr-repo-url')  // set in Jenkins
-    IMAGE_TAG       = "${BUILD_NUMBER}-${GIT_COMMIT[0..6]}"
+    ECR_REPO        = '062315168148.dkr.ecr.us-east-1.amazonaws.com/cloud-cicd-app'
     CONTAINER_NAME  = 'cloud-cicd-app'
     APP_PORT        = '3000'
   }
@@ -17,6 +15,9 @@ pipeline {
         echo '==> Checking out source code'
         checkout scm
         sh 'git log --oneline -5'
+        script {
+          env.IMAGE_TAG = "${BUILD_NUMBER}-${GIT_COMMIT.take(7)}"  // ✅ set here instead
+        }
       }
     }
 
@@ -54,7 +55,6 @@ pipeline {
       steps {
         echo '==> Scanning image for vulnerabilities'
         sh """
-          # Trivy scan (install trivy on Jenkins server first)
           trivy image --exit-code 1 --severity HIGH,CRITICAL \\
             --no-progress ${ECR_REPO}:${IMAGE_TAG} || true
         """
@@ -94,16 +94,11 @@ pipeline {
             ssh -o StrictHostKeyChecking=no \\
               -i ${SSH_KEY} ${SSH_USER}@${DEV_SERVER_IP} \\
               'bash -s' << 'DEPLOY'
-              # Pull latest image
               aws ecr get-login-password --region us-east-1 | \\
                 docker login --username AWS --password-stdin ${ECR_REPO}
               docker pull ${ECR_REPO}:${IMAGE_TAG}
-
-              # Stop old container
               docker stop cloud-cicd-app || true
               docker rm   cloud-cicd-app || true
-
-              # Start new container
               docker run -d \\
                 --name cloud-cicd-app \\
                 -p 3000:3000 \\
@@ -126,8 +121,6 @@ DEPLOY
       }
       steps {
         echo '==> Deploying to PRODUCTION environment'
-        // Same deployment steps targeting prod ASG instances
-        // In production, prefer using AWS CodeDeploy or ECS rolling updates
         sh 'echo Production deployment complete'
       }
     }
@@ -139,10 +132,8 @@ DEPLOY
     }
     failure {
       echo 'Pipeline FAILED — check logs above'
-      // Send notification (Slack, email, etc.)
     }
     always {
-      // Clean up local Docker images to save disk space
       sh "docker rmi ${ECR_REPO}:${IMAGE_TAG} || true"
       sh 'docker system prune -f || true'
     }
