@@ -1,0 +1,31 @@
+# Terraform state files
+terraform.tfstate
+terraform.tfstate.backup
+
+# Terraform working directory
+.terraform/
+.terraform.lock.hcl
+
+# Variable files (may contain secrets)
+*.tfvars
+
+# AWS key files
+*.pem
+*.key
+
+# Node modules
+node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+
+
+
+
+
+
+
+
+
